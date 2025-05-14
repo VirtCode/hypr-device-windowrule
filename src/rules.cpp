@@ -1,5 +1,7 @@
 #include "rules.hpp"
 #include "globals.hpp"
+
+#include <hyprland/src/devices/IKeyboard.hpp>
 #include <hyprland/src/managers/input/InputManager.hpp>
 
 #define private public
@@ -14,7 +16,7 @@ void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
         if (rule->m_ruleType == CWindowRule::RULE_PLUGIN && rule->m_rule.starts_with(CONFIG_WINDOWRULE)) {
             auto device = CVarList(rule->m_rule, 0, ' ')[1];
 
-            Debug::log(ERR, "[device-windowrule] setting device to {}", device);
+            Debug::log(LOG, "[device-windowrule] setting device to {}", device);
 
             if (device.empty()) m_selected = {};
             else m_selected = device;
@@ -28,13 +30,18 @@ void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
     if (!set) m_selected = {};
 
     if (last != m_selected) {
-        Debug::log(ERR, "[device-windowrule] re-setting input device settings");
+        Debug::log(LOG, "[device-windowrule] changing input device config from {} to {}", last.value_or("<none>"), m_selected.value_or("<none>"));
 
         // see HyprCtl.cpp line 1119
         g_pInputManager->setKeyboardLayout();     // update kb layout
         g_pInputManager->setPointerConfigs();     // update mouse cfgs
         g_pInputManager->setTouchDeviceConfigs(); // update touch device cfgs
         g_pInputManager->setTabletConfigs();      // update tablets
+
+        // also update leds
+        for (auto const& keyboard : g_pInputManager->m_keyboards) {
+            keyboard->updateLEDs();
+        }
     }
 }
 
@@ -52,6 +59,23 @@ Hyprlang::CConfigValue* CDeviceWindowrules::getConfig(const std::string& dev, co
     }
 
     return nullptr;
+}
+
+uint32_t CDeviceWindowrules::getLeds(const std::string& dev) const {
+    static auto* const* PGLOBAL = (Hyprlang::INT* const*) HyprlandAPI::getConfigValue(PHANDLE, CONFIG_VAR_GLOBAL_LEDS)->getDataStaticPtr();
+
+    if (m_selected.has_value() && m_leds.contains(m_selected.value())) {
+
+        // check that the device is also affected by the changes
+        if (**PGLOBAL || !m_devices.contains(m_selected.value()) || m_devices.at(m_selected.value()).contains(dev))
+            return m_leds.at(m_selected.value());
+    }
+
+    return 0; // no changes, they are |-ed
+}
+
+void CDeviceWindowrules::registerLedOverride(const std::string& rule, const uint32_t leds) {
+    m_leds.insert({rule, leds});
 }
 
 void CDeviceWindowrules::registerDeviceFilter(const std::string& rule, const std::string& dev) {

@@ -3,6 +3,7 @@
 #include <hyprland/src/plugins/HookSystem.hpp>
 #include <hyprland/src/plugins/PluginAPI.hpp>
 #include <hyprland/src/managers/input/InputManager.hpp>
+#include <hyprland/src/devices/IKeyboard.hpp>
 #include <hyprland/src/Compositor.hpp>
 #include <hyprlang.hpp>
 #include <string>
@@ -25,6 +26,15 @@ Hyprlang::CConfigValue* hkGetConfigValueSafeDevice(void* thisptr, const std::str
     else return (*(origGetConfigValueSafeDevice)g_pGetConfigValueSafeDeviceHook->m_original)(thisptr, dev, val, fallback);
 }
 
+typedef void (*origUpdateLEDs)(IKeyboard*, uint32_t leds);
+inline CFunctionHook* g_pUpdateLEDsHook = nullptr;
+void hkUpdateLEDs(IKeyboard* thisptr, uint32_t leds) {
+
+    leds |= g_pDeviceWindowrules->getLeds(thisptr->m_hlName);
+
+    (*(origUpdateLEDs)g_pUpdateLEDsHook->m_original)(thisptr, leds);
+}
+
 Hyprlang::CParseResult onDeviceFilterKeyword(const char* command, const char* value) {
     Hyprlang::CParseResult res;
     CVarList args(value, 0, ',');
@@ -32,7 +42,20 @@ Hyprlang::CParseResult onDeviceFilterKeyword(const char* command, const char* va
     if (args.size() == 2)
         g_pDeviceWindowrules->registerDeviceFilter(args[0], args[1]);
     else
-        res.setError("devicefilter keyword expects two arguments (name, device-name)");
+        res.setError("expected two arguments: name, device-name");
+
+    return res;
+}
+
+Hyprlang::CParseResult onDeviceLedKeyword(const char* command, const char* value) {
+    Hyprlang::CParseResult res;
+    CVarList args(value, 0, ',');
+    auto mask = configStringToInt(args[1]);
+
+    if (args.size() == 2 && mask.has_value())
+        g_pDeviceWindowrules->registerLedOverride(args[0], mask.value());
+    else
+        res.setError("expected two arguments: name, led-mask (integer)");
 
     return res;
 }
@@ -62,7 +85,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     // check that header version aligns with running version
     const std::string HASH = __hyprland_api_get_hash();
-    if (false && HASH != GIT_COMMIT_HASH) {
+    if (HASH != GIT_COMMIT_HASH) {
         HyprlandAPI::addNotification(PHANDLE, "[device-windowrule] Failed to load, mismatched headers!", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
         HyprlandAPI::addNotification(PHANDLE, std::format("[device-windowrule] Built with: {}, running: {}", GIT_COMMIT_HASH, HASH), CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
         throw std::runtime_error("version mismatch");
@@ -72,11 +95,14 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     g_pDeviceWindowrules = makeUnique<CDeviceWindowrules>();
 
     // create config
+    HyprlandAPI::addConfigValue(PHANDLE, CONFIG_VAR_GLOBAL_LEDS, Hyprlang::INT{0});
     HyprlandAPI::addConfigKeyword(PHANDLE, CONFIG_RULE_FILTER, onDeviceFilterKeyword, Hyprlang::SHandlerOptions {});
+    HyprlandAPI::addConfigKeyword(PHANDLE, CONFIG_RULE_LED, onDeviceLedKeyword, Hyprlang::SHandlerOptions {});
 
     // try hooking
     try {
         g_pGetConfigValueSafeDeviceHook = hook("getConfigValueSafeDevice", "CConfigManager", (void*) &hkGetConfigValueSafeDevice);
+        g_pUpdateLEDsHook = hook("updateLEDsEj", "IKeyboard", (void*) &hkUpdateLEDs); // we wanna hook the one with the args
     } catch (...) {
         HyprlandAPI::addNotification(PHANDLE, "[device-windowrule] Failed to load, hooks could not be made!", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
         throw std::runtime_error("hooks failed");
