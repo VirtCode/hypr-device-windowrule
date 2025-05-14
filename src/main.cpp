@@ -25,6 +25,18 @@ Hyprlang::CConfigValue* hkGetConfigValueSafeDevice(void* thisptr, const std::str
     else return (*(origGetConfigValueSafeDevice)g_pGetConfigValueSafeDeviceHook->m_original)(thisptr, dev, val, fallback);
 }
 
+Hyprlang::CParseResult onDeviceFilterKeyword(const char* command, const char* value) {
+    Hyprlang::CParseResult res;
+    CVarList args(value, 0, ',');
+
+    if (args.size() == 2)
+        g_pDeviceWindowrules->registerDeviceFilter(args[0], args[1]);
+    else
+        res.setError("devicefilter keyword expects two arguments (name, device-name)");
+
+    return res;
+}
+
 /* hooks a function hook */
 CFunctionHook* hook(std::string name, std::string object, void* function) {
     auto names = HyprlandAPI::findFunctionsByName(PHANDLE, name);
@@ -59,6 +71,9 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     // init plugin
     g_pDeviceWindowrules = makeUnique<CDeviceWindowrules>();
 
+    // create config
+    HyprlandAPI::addConfigKeyword(PHANDLE, CONFIG_RULE_FILTER, onDeviceFilterKeyword, Hyprlang::SHandlerOptions {});
+
     // try hooking
     try {
         g_pGetConfigValueSafeDeviceHook = hook("getConfigValueSafeDevice", "CConfigManager", (void*) &hkGetConfigValueSafeDevice);
@@ -73,7 +88,15 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     });
 
     static const auto RULE_CHANGE_CALLBACK = HyprlandAPI::registerCallbackDynamic(PHANDLE, "windowUpdateRules", [&](void* self, SCallbackInfo&, std::any data) {
-        g_pDeviceWindowrules->updateDevice(std::any_cast<PHLWINDOW>(data));
+        auto window = std::any_cast<PHLWINDOW>(data);
+
+        // only update device if the window is also focussed
+        if (window == g_pCompositor->m_lastWindow)
+            g_pDeviceWindowrules->updateDevice(window);
+    });
+
+    static const auto PRE_CONFIG_CALLBACK = HyprlandAPI::registerCallbackDynamic( PHANDLE, "preConfigReload", [&](void* self, SCallbackInfo&, std::any data) {
+        g_pDeviceWindowrules->clearConfig();
     });
 
     return {"device-windowrule", "a plugin to apply input device config based on the focused window", "Virt", "0.1"};

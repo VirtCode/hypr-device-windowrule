@@ -1,4 +1,5 @@
 #include "rules.hpp"
+#include "globals.hpp"
 #include <hyprland/src/managers/input/InputManager.hpp>
 
 #define private public
@@ -10,7 +11,7 @@ void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
     bool set = false;
 
     for (auto rule : window->m_matchedRules) {
-        if (rule->m_ruleType == CWindowRule::RULE_PLUGIN && rule->m_rule.starts_with("plugin:device")) {
+        if (rule->m_ruleType == CWindowRule::RULE_PLUGIN && rule->m_rule.starts_with(CONFIG_WINDOWRULE)) {
             auto device = CVarList(rule->m_rule, 0, ' ')[1];
 
             Debug::log(ERR, "[device-windowrule] setting device to {}", device);
@@ -39,6 +40,11 @@ void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
 
 Hyprlang::CConfigValue* CDeviceWindowrules::getConfig(const std::string& dev, const std::string& val) const {
     if (m_selected.has_value()) {
+
+        /// only use custom rule if whitelist is empty or device is whitelisted
+        if (m_devices.contains(m_selected.value()) && !m_devices.at(m_selected.value()).contains(dev))
+            return nullptr;
+
         const auto VAL = g_pConfigManager->m_config->getSpecialConfigValuePtr("device", val.c_str(), m_selected->c_str());
 
         if (VAL && VAL->m_bSetByUser)
@@ -46,4 +52,14 @@ Hyprlang::CConfigValue* CDeviceWindowrules::getConfig(const std::string& dev, co
     }
 
     return nullptr;
+}
+
+void CDeviceWindowrules::registerDeviceFilter(const std::string& rule, const std::string& dev) {
+    if (m_devices.contains(rule)) m_devices.at(rule).insert(dev);
+    else m_devices.insert({rule, {dev}});
+}
+
+void CDeviceWindowrules::clearConfig() {
+    m_devices.clear();
+    m_leds.clear();
 }
