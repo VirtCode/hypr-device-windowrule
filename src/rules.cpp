@@ -12,7 +12,7 @@ void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
     auto last = m_selected;
     bool set = false;
 
-    for (auto rule : window->m_matchedRules) {
+    if (window) for (auto rule : window->m_matchedRules) {
         if (rule->m_ruleType == CWindowRule::RULE_PLUGIN && rule->m_rule.starts_with(CONFIG_WINDOWRULE)) {
             auto device = CVarList(rule->m_rule, 0, ' ')[1];
 
