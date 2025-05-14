@@ -1,0 +1,14 @@
+[repository]
+name = "device-windowrule"
+authors = "Virt"
+commit_pins = [
+    # v Hyprland                                  v hypr-device-windowrule
+]
+
+[dynamic-cursors]
+description = "apply input device config based on the focused window"
+authors = ["Virt"]
+output = "out/device-windowrule.so"
+build = [
+    "make all",
+]
