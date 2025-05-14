@@ -5,7 +5,6 @@
 #include <hyprland/src/managers/input/InputManager.hpp>
 #include <hyprland/src/Compositor.hpp>
 #include <hyprlang.hpp>
-#include <optional>
 #include <string>
 #include <unistd.h>
 
@@ -13,56 +12,17 @@
 #include <hyprland/src/config/ConfigManager.hpp>
 #undef private
 
-#include "desktop/WindowRule.hpp"
 #include "globals.hpp"
-
-inline std::optional<std::string> selected;
-
-/* called on focus change with new window */
-void focusChanged(PHLWINDOW window) {
-    auto last = selected;
-    bool set = false;
-
-    for (auto rule : window->m_matchedRules) {
-        if (rule->m_ruleType == CWindowRule::RULE_PLUGIN && rule->m_rule.starts_with("plugin:device")) {
-            auto device = CVarList(rule->m_rule, 0, ' ')[1];
-
-            Debug::log(LOG, "[device-windowrule] setting device to {}", device);
-
-            if (device.empty()) selected = {};
-            else selected = device;
-
-            set = true;
-            break;
-        }
-    }
-
-    // unset if no window rule
-    if (!set) selected = {};
-
-    if (last != selected) {
-        Debug::log(LOG, "[device-windowrule] re-setting input device settings");
-
-        // see HyprCtl.cpp line 1119
-        g_pInputManager->setKeyboardLayout();     // update kb layout
-        g_pInputManager->setPointerConfigs();     // update mouse cfgs
-        g_pInputManager->setTouchDeviceConfigs(); // update touch device cfgs
-        g_pInputManager->setTabletConfigs();      // update tablets
-    }
-}
+#include "rules.hpp"
 
 typedef Hyprlang::CConfigValue* (*origGetConfigValueSafeDevice)(void*, const std::string& dev, const std::string& val, const std::string& fallback);
 inline CFunctionHook* g_pGetConfigValueSafeDeviceHook = nullptr;
 Hyprlang::CConfigValue* hkGetConfigValueSafeDevice(void* thisptr, const std::string& dev, const std::string& val, const std::string& fallback) {
-    if (selected.has_value()) {
-        const auto VAL = g_pConfigManager->m_config->getSpecialConfigValuePtr("device", val.c_str(), selected->c_str());
-
-        if (VAL && VAL->m_bSetByUser)
-            return VAL;
-    }
+    const auto value = g_pDeviceWindowrules->getConfig(dev, val);
 
     // fall back to normal config if not set
-    return (*(origGetConfigValueSafeDevice)g_pGetConfigValueSafeDeviceHook->m_original)(thisptr, dev, val, fallback);
+    if (value) return value;
+    else return (*(origGetConfigValueSafeDevice)g_pGetConfigValueSafeDeviceHook->m_original)(thisptr, dev, val, fallback);
 }
 
 /* hooks a function hook */
@@ -96,6 +56,9 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         throw std::runtime_error("version mismatch");
     }
 
+    // init plugin
+    g_pDeviceWindowrules = makeUnique<CDeviceWindowrules>();
+
     // try hooking
     try {
         g_pGetConfigValueSafeDeviceHook = hook("getConfigValueSafeDevice", "CConfigManager", (void*) &hkGetConfigValueSafeDevice);
@@ -104,8 +67,13 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         throw std::runtime_error("hooks failed");
     }
 
+    // register callbacks
     static const auto FOCUS_CALLBACK = HyprlandAPI::registerCallbackDynamic(PHANDLE, "activeWindow", [&](void* self, SCallbackInfo&, std::any data) {
-        focusChanged(std::any_cast<PHLWINDOW>(data));
+        g_pDeviceWindowrules->updateDevice(std::any_cast<PHLWINDOW>(data));
+    });
+
+    static const auto RULE_CHANGE_CALLBACK = HyprlandAPI::registerCallbackDynamic(PHANDLE, "windowUpdateRules", [&](void* self, SCallbackInfo&, std::any data) {
+        g_pDeviceWindowrules->updateDevice(std::any_cast<PHLWINDOW>(data));
     });
 
     return {"device-windowrule", "a plugin to apply input device config based on the focused window", "Virt", "0.1"};
