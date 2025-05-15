@@ -23,12 +23,28 @@ Hyprlang::CConfigValue* hkGetConfigValueSafeDevice(void* thisptr, const std::str
     if (value) return value;
 
     // fall back to normal config if not set
-    const auto orig = (*(origGetConfigValueSafeDevice)g_pGetConfigValueSafeDeviceHook->m_original)(thisptr, dev, val, fallback);
-    static Hyprlang::CConfigValue true_value = Hyprlang::INT { true };
+    return (*(origGetConfigValueSafeDevice)g_pGetConfigValueSafeDeviceHook->m_original)(thisptr, dev, val, fallback);
+}
 
-    // if it is a special device-only value (currently `enabled` and `keybinds`) just return true
-    if (!orig) Debug::log(WARN, "[device-windowrule] no value '{}' for device '{}' with fallback '{}', assuming `true`", val, dev, fallback);
-    return orig ? orig : &true_value;
+typedef int (*origGetDeviceInt)(void*, const std::string& dev, const std::string& val, const std::string& fallback);
+inline CFunctionHook* g_pGetDeviceIntHook = nullptr;
+int hkGetDeviceInt(void* thisptr, const std::string& dev, const std::string& val, const std::string& fallback) {
+    auto config = g_pConfigManager->getConfigValueSafeDevice(dev, val, fallback);
+
+    // can be null if the value does not exist and the fallback is "" which happens when it is a special device-only value (currently `enabled` and `keybinds`)
+    //
+    // this method is still called for these keywords because we report that a device config exists if a custom one is loaded,
+    // but still fall back to what hl provides if we don't have value (but hl might not have a device config)
+    // so we just return `true` here because for the current values this is always correct. also these special vaules are only integers at the moment
+    //
+    // why don't we handle that in getConfigValueSaveDevice (like in 72647089156b0074ea2956fbb6d4b21dc6363ea5)?
+    // well, glad you asked. if we do the check there, everything works fine BUT ONLY IN FUCKING DEBUG BUILDS
+    // as soon as we try a release build we encounter crashes in this method. attempts at debugging that prove futile cause
+    // when we modify it to print some debug info, the crashes stop again??
+    //
+    // anyways, I wasted about three hours trying to debug that and have now just hooked the method as a "fix"
+    // if you have any insights about this, MRs are welcome!
+    return config ? std::any_cast<Hyprlang::INT>(config->getValue()) : true;
 }
 
 typedef bool (*origDeviceConfigExists)(void*, const std::string& dev);
@@ -115,6 +131,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     // try hooking
     try {
         g_pGetConfigValueSafeDeviceHook = hook("getConfigValueSafeDevice", "CConfigManager", (void*) &hkGetConfigValueSafeDevice);
+        g_pGetDeviceIntHook = hook("getDeviceInt", "CConfigManager", (void*) &hkGetDeviceInt);
         g_pDeviceConfigExistsHook = hook("deviceConfigExists", "CConfigManager", (void*) &hkDeviceConfigExists);
 
         g_pUpdateLEDsHook = hook("updateLEDsEj", "IKeyboard", (void*) &hkUpdateLEDs); // we wanna hook the one with the args
