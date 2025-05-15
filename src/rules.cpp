@@ -61,6 +61,10 @@ Hyprlang::CConfigValue* CDeviceWindowrules::getConfig(const std::string& dev, co
     return nullptr;
 }
 
+bool CDeviceWindowrules::hasConfig(const std::string& dev) const {
+    return m_selected.has_value() && (!m_devices.contains(m_selected.value()) || m_devices.at(m_selected.value()).contains(dev));
+}
+
 uint32_t CDeviceWindowrules::getLeds(const std::string& dev) const {
     static auto* const* PGLOBAL = (Hyprlang::INT* const*) HyprlandAPI::getConfigValue(PHANDLE, CONFIG_VAR_GLOBAL_LEDS)->getDataStaticPtr();
 

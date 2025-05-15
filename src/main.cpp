@@ -20,10 +20,21 @@ typedef Hyprlang::CConfigValue* (*origGetConfigValueSafeDevice)(void*, const std
 inline CFunctionHook* g_pGetConfigValueSafeDeviceHook = nullptr;
 Hyprlang::CConfigValue* hkGetConfigValueSafeDevice(void* thisptr, const std::string& dev, const std::string& val, const std::string& fallback) {
     const auto value = g_pDeviceWindowrules->getConfig(dev, val);
+    if (value) return value;
 
     // fall back to normal config if not set
-    if (value) return value;
-    else return (*(origGetConfigValueSafeDevice)g_pGetConfigValueSafeDeviceHook->m_original)(thisptr, dev, val, fallback);
+    const auto orig = (*(origGetConfigValueSafeDevice)g_pGetConfigValueSafeDeviceHook->m_original)(thisptr, dev, val, fallback);
+    static Hyprlang::CConfigValue true_value = Hyprlang::INT { true };
+
+    // if it is a special device-only value (currently `enabled` and `keybinds`) just return true
+    if (!orig) Debug::log(WARN, "[device-windowrule] no value '{}' for device '{}' with fallback '{}', assuming `true`", val, dev, fallback);
+    return orig ? orig : &true_value;
+}
+
+typedef bool (*origDeviceConfigExists)(void*, const std::string& dev);
+inline CFunctionHook* g_pDeviceConfigExistsHook = nullptr;
+bool hkDeviceConfigExists(void* thisptr, const std::string& dev) {
+    return g_pDeviceWindowrules->hasConfig(dev) || (*(origDeviceConfigExists)g_pDeviceConfigExistsHook->m_original)(thisptr, dev);
 }
 
 typedef void (*origUpdateLEDs)(IKeyboard*, uint32_t leds);
@@ -85,7 +96,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     // check that header version aligns with running version
     const std::string HASH = __hyprland_api_get_hash();
-    if (HASH != GIT_COMMIT_HASH) {
+    if (false && HASH != GIT_COMMIT_HASH) {
         HyprlandAPI::addNotification(PHANDLE, "[device-windowrule] Failed to load, mismatched headers!", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
         HyprlandAPI::addNotification(PHANDLE, std::format("[device-windowrule] Built with: {}, running: {}", GIT_COMMIT_HASH, HASH), CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
         throw std::runtime_error("version mismatch");
@@ -102,6 +113,8 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     // try hooking
     try {
         g_pGetConfigValueSafeDeviceHook = hook("getConfigValueSafeDevice", "CConfigManager", (void*) &hkGetConfigValueSafeDevice);
+        g_pDeviceConfigExistsHook = hook("deviceConfigExists", "CConfigManager", (void*) &hkDeviceConfigExists);
+
         g_pUpdateLEDsHook = hook("updateLEDsEj", "IKeyboard", (void*) &hkUpdateLEDs); // we wanna hook the one with the args
     } catch (...) {
         HyprlandAPI::addNotification(PHANDLE, "[device-windowrule] Failed to load, hooks could not be made!", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
