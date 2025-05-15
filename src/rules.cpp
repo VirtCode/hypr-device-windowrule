@@ -1,14 +1,16 @@
 #include "rules.hpp"
 #include "globals.hpp"
 
-#include <hyprland/src/devices/IKeyboard.hpp>
 #include <hyprland/src/managers/input/InputManager.hpp>
 
 #define private public
+#include <hyprland/src/devices/IKeyboard.hpp>
 #include <hyprland/src/config/ConfigManager.hpp>
 #undef private
 
 void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
+    static auto* const* PREPLAY = (Hyprlang::INT* const*) HyprlandAPI::getConfigValue(PHANDLE, CONFIG_VAR_CONSERVE_KEYS)->getDataStaticPtr();
+
     auto last = m_selected;
     bool set = false;
 
@@ -38,8 +40,18 @@ void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
         g_pInputManager->setTouchDeviceConfigs(); // update touch device cfgs
         g_pInputManager->setTabletConfigs();      // update tablets
 
-        // also update leds
         for (auto const& keyboard : g_pInputManager->m_keyboards) {
+            if (**PREPLAY) { // we replay for _all_ keyboards cause the layout will be reloaded for every one (even if no changes)
+                auto original = keyboard->m_pressedXKB;
+                keyboard->m_pressedXKB.clear();
+
+                // we replay all pressed keys to make sure modifiers etc. are updated correctly again
+                // just setting the modifiers again is not sufficient for some reason
+                for (uint32_t key : original)
+                    keyboard->updateXkbStateWithKey(key, true);
+            }
+
+            // also update leds
             keyboard->updateLEDs();
         }
     }
