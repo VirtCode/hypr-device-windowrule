@@ -1,12 +1,12 @@
 #include "rules.hpp"
 #include "globals.hpp"
 
-#include <hyprland/src/managers/input/InputManager.hpp>
-
 #define private public
 #include <hyprland/src/devices/IKeyboard.hpp>
 #include <hyprland/src/config/ConfigManager.hpp>
 #undef private
+
+#include <hyprland/src/managers/input/InputManager.hpp>
 
 void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
     static auto* const* PREPLAY = (Hyprlang::INT* const*) HyprlandAPI::getConfigValue(PHANDLE, CONFIG_VAR_CONSERVE_KEYS)->getDataStaticPtr();
