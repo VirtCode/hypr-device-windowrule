@@ -14,17 +14,23 @@ void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
     auto last = m_selected;
     bool set = false;
 
-    if (window) for (auto rule : window->m_matchedRules) {
-        if (rule->m_ruleType == CWindowRule::RULE_PLUGIN && rule->m_rule.starts_with(CONFIG_WINDOWRULE)) {
-            auto device = CVarList(rule->m_rule, 0, ' ')[1];
-
-            Debug::log(LOG, "[device-windowrule] setting device to {}", device);
-
-            if (device.empty()) m_selected = {};
-            else m_selected = device;
-
+    if (window) {
+        // first check dynamic rules, otherwise resort to window rules
+        if (m_dynamically.contains(window)) {
+            m_selected = m_dynamically.at(window);
             set = true;
-            break;
+        } else for (auto rule : window->m_matchedRules) {
+            if (rule->m_ruleType == CWindowRule::RULE_PLUGIN && rule->m_rule.starts_with(CONFIG_WINDOWRULE)) {
+                auto device = CVarList(rule->m_rule, 0, ' ')[1];
+
+                Debug::log(LOG, "[device-windowrule] setting device to {}", device);
+
+                if (device.empty()) m_selected = {};
+                else m_selected = device;
+
+                set = true;
+                break;
+            }
         }
     }
 
@@ -102,4 +108,16 @@ void CDeviceWindowrules::registerDeviceFilter(const std::string& rule, const std
 void CDeviceWindowrules::clearConfig() {
     m_devices.clear();
     m_leds.clear();
+}
+
+void CDeviceWindowrules::setDynamically(const PHLWINDOW window, const std::optional<std::string> rule) {
+    if (!window) return;
+
+    nope make it toggle the thing i.e. with the following inputs
+    set amogus -> amogus
+    set lehl -> lehl
+    set lehl -> unset
+
+    if (rule.has_value()) m_dynamically.insert({window, rule.value()});
+    else m_dynamically.erase(window);
 }

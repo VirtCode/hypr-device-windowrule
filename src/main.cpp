@@ -147,6 +147,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     static const auto RULE_CHANGE_CALLBACK = HyprlandAPI::registerCallbackDynamic(PHANDLE, "windowUpdateRules", [&](void* self, SCallbackInfo&, std::any data) {
         auto window = std::any_cast<PHLWINDOW>(data);
+        PHLWINDOWREF ref = window;
 
         // only update device if the window is also focussed
         if (window == g_pCompositor->m_lastWindow)

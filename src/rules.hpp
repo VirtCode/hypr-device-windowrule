@@ -11,6 +11,9 @@ class CDeviceWindowrules {
     /* currently selected device rule */
     std::optional<std::string> m_selected;
 
+    /* dynamically set layouts per window */
+    std::unordered_map<PHLWINDOWREF, std::string> m_dynamically;
+
     /* devices allowed to use a rule */
     std::unordered_map<std::string, std::unordered_set<std::string>> m_devices;
     /* led mask applied when a rule is used */
@@ -38,6 +41,9 @@ class CDeviceWindowrules {
 
     /* reset devices and led rules */
     void clearConfig();
+
+    /* dynamically set a rule for a given window, pass none to unset */
+    void setDynamically(const PHLWINDOW window, const std::optional<std::string> rule);
 };
 
 inline UP<CDeviceWindowrules> g_pDeviceWindowrules;
