@@ -2,9 +2,11 @@
 #include "globals.hpp"
 
 #define private public
+#define protected public
 #include <hyprland/src/devices/IKeyboard.hpp>
 #include <hyprland/src/config/ConfigManager.hpp>
 #undef private
+#undef protected
 
 #include <hyprland/src/managers/input/InputManager.hpp>
 
@@ -42,13 +44,15 @@ void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
 
         for (auto const& keyboard : g_pInputManager->m_keyboards) {
             if (**PREPLAY) { // we replay for _all_ keyboards cause the layout will be reloaded for every one (even if no changes)
-                auto original = keyboard->m_pressedXKB;
-                keyboard->m_pressedXKB.clear();
+                auto original = keyboard->m_pressed;
+                keyboard->m_pressed.clear();
 
                 // we replay all pressed keys to make sure modifiers etc. are updated correctly again
                 // just setting the modifiers again is not sufficient for some reason
-                for (uint32_t key : original)
-                    keyboard->updateXkbStateWithKey(key, true);
+                for (uint32_t key : original) {
+                    keyboard->updatePressed(key, true);
+                    keyboard->updateXkbStateWithKey(key + 8, true); // this +8 converts the keycode to an xkb keycode, as we now store the normal ones
+                }
             }
 
             // also update leds

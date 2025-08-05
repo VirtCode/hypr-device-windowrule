@@ -3,6 +3,9 @@ name = "device-windowrule"
 authors = "Virt"
 commit_pins = [
     # v Hyprland                                  v hypr-device-windowrule
+    ["9958d297641b5c84dcff93f9039d80a5ad37ab00", "9947768a2afcd29d089b5b758e3e4dc948a27465"], # v0.49.0
+    ["c4a4c341568944bd4fb9cd503558b2de602c0213", "9947768a2afcd29d089b5b758e3e4dc948a27465"], # v0.50.0
+    ["4e242d086e20b32951fdc0ebcbfb4d41b5be8dcc", "9947768a2afcd29d089b5b758e3e4dc948a27465"], # v0.50.1
 ]
 
 [dynamic-cursors]
