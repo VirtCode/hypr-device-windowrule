@@ -50,8 +50,11 @@ void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
                 // we replay all pressed keys to make sure modifiers etc. are updated correctly again
                 // just setting the modifiers again is not sufficient for some reason
                 for (uint32_t key : original) {
+                    auto xkbKey = key + 8; // this +8 converts the keycode to an xkb keycode, as we now store the normal ones
+
+                    keyboard->updateXkbStateWithKey(xkbKey, false); // release first so unchanged devices won't have stuck keys
                     keyboard->updatePressed(key, true);
-                    keyboard->updateXkbStateWithKey(key + 8, true); // this +8 converts the keycode to an xkb keycode, as we now store the normal ones
+                    keyboard->updateXkbStateWithKey(xkbKey, true);
                 }
             }
 
