@@ -1,3 +1,4 @@
+#include "debug/Log.hpp"
 #include <hyprgraphics/color/Color.hpp>
 #include <hyprland/src/helpers/memory/Memory.hpp>
 #include <hyprland/src/plugins/HookSystem.hpp>
@@ -45,6 +46,33 @@ int hkGetDeviceInt(void* thisptr, const std::string& dev, const std::string& val
     // anyways, I wasted about three hours trying to debug that and have now just hooked the method as a "fix"
     // if you have any insights about this, MRs are welcome!
     return config ? std::any_cast<Hyprlang::INT>(config->getValue()) : true;
+}
+
+typedef std::string (*origGetDeviceString)(void*, const std::string& dev, const std::string& v, const std::string& fallback);
+inline CFunctionHook* g_pGetDeviceStringHook = nullptr;
+std::string hkGetDeviceString(void* thisptr, const std::string& dev, const std::string& v, const std::string& fallback) {
+    // 1:1 copy from hyprland
+    auto VAL = std::string{std::any_cast<Hyprlang::STRING>(g_pConfigManager->getConfigValueSafeDevice(dev, v, fallback)->getValue())};
+
+    if (VAL == STRVAL_EMPTY)
+        return "";
+
+    return VAL;
+}
+
+typedef float (*origGetDeviceFloat)(void*, const std::string& dev, const std::string& v, const std::string& fallback);
+inline CFunctionHook* g_pGetDeviceFloatHook = nullptr;
+float hkGetDeviceFloat(void* thisptr, const std::string& dev, const std::string& v, const std::string& fallback) {
+    // 1:1 copy from hyprland
+    return std::any_cast<Hyprlang::FLOAT>(g_pConfigManager->getConfigValueSafeDevice(dev, v, fallback)->getValue());
+}
+
+typedef Vector2D (*origGetDeviceVec)(void*, const std::string& dev, const std::string& v, const std::string& fallback);
+inline CFunctionHook* g_pGetDeviceVecHook = nullptr;
+Vector2D hkGetDeviceVec(void* thisptr, const std::string& dev, const std::string& v, const std::string& fallback) {
+    // 1:1 copy from hyprland
+    auto vec = std::any_cast<Hyprlang::VEC2>(g_pConfigManager->getConfigValueSafeDevice(dev, v, fallback)->getValue());
+    return {vec.x, vec.y};
 }
 
 typedef bool (*origDeviceConfigExists)(void*, const std::string& dev);
@@ -131,8 +159,26 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     // try hooking
     try {
         g_pGetConfigValueSafeDeviceHook = hook("getConfigValueSafeDevice", "CConfigManager", (void*) &hkGetConfigValueSafeDevice);
-        g_pGetDeviceIntHook = hook("getDeviceInt", "CConfigManager", (void*) &hkGetDeviceInt);
         g_pDeviceConfigExistsHook = hook("deviceConfigExists", "CConfigManager", (void*) &hkDeviceConfigExists);
+
+        // you wonder why we hook these methods if we have already hooked "getConfigValueSafeDevice", don't
+        // all these methods just call that in the background, and isn't the implementation here the same???
+        //
+        // glad you are still reading this shit. we are again at the mercy of the compiler, because for some
+        // fucking reason the compiler probably inlines `getConfigValueSafeDevice` so our hook is not called.
+        // note that these methods are in the the same compilation unit, meaning even disabling LTO won't help
+        // (like in https://github.com/hyprwm/Hyprland/pull/11972)
+        //
+        // so we could of course disable IPA on `getConfigValueSafeDevice`, but vaxry is currently against
+        // adding things for specific plugins, and noone uses this anyways
+        //
+        // to do that, add `__attribute__ ((noipa))` to `getConfigValueSafeDevice` in `ConfigManager.cpp`
+        //
+        // but because you don't compile hyprland yourself probably, we'll go with this ugly workaround:
+        g_pGetDeviceIntHook = hook("getDeviceInt", "CConfigManager", (void*) &hkGetDeviceInt);
+        g_pGetDeviceStringHook = hook("getDeviceString", "CConfigManager", (void*) &hkGetDeviceString);
+        g_pGetDeviceFloatHook = hook("getDeviceFloat", "CConfigManager", (void*) &hkGetDeviceFloat);
+        g_pGetDeviceVecHook = hook("getDeviceVec", "CConfigManager", (void*) &hkGetDeviceVec);
 
         g_pUpdateLEDsHook = hook("updateLEDsEj", "IKeyboard", (void*) &hkUpdateLEDs); // we wanna hook the one with the args
     } catch (...) {
