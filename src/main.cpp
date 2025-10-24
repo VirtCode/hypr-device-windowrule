@@ -139,11 +139,11 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     PHANDLE = handle;
 
     // check that header version aligns with running version
-    const std::string HASH = __hyprland_api_get_hash();
-    if (HASH != GIT_COMMIT_HASH) {
-        HyprlandAPI::addNotification(PHANDLE, "[device-windowrule] Failed to load, mismatched headers!", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
-        HyprlandAPI::addNotification(PHANDLE, std::format("[device-windowrule] Built with: {}, running: {}", GIT_COMMIT_HASH, HASH), CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
-        throw std::runtime_error("version mismatch");
+    const std::string CLIENT_HASH = __hyprland_api_get_client_hash();
+    const std::string COMPOSITOR_HASH = __hyprland_api_get_hash();
+    if (COMPOSITOR_HASH != CLIENT_HASH) {
+        HyprlandAPI::addNotification(PHANDLE, "[device-windowrule] Failed to load, mismatched versions! (see logs)", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
+        throw std::runtime_error(std::format("version mismatch, built against: {}, running compositor: {}", CLIENT_HASH, COMPOSITOR_HASH));
     }
 
     // init plugin
