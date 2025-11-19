@@ -1,4 +1,5 @@
 #include <hyprland/src/desktop/DesktopTypes.hpp>
+#include <src/desktop/rule/windowRule/WindowRuleEffectContainer.hpp>
 #include <cstdint>
 #include <hyprlang.hpp>
 #include <optional>
@@ -17,6 +18,9 @@ class CDeviceWindowrules {
     std::unordered_map<std::string, uint32_t> m_leds;
 
   public:
+    /* the window rule id */
+    Desktop::Rule::CWindowRuleEffectContainer::storageType m_ruleID;
+
     /* should be called when a new window is focussed or the focussed window changes */
     void updateDevice(const PHLWINDOW);
 

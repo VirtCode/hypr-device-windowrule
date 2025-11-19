@@ -32,7 +32,7 @@ Note that you can use ***all*** options here that the [device section](https://w
 
 To now apply this configuration when a certain window is in focus, you can use the `plugin:device` [windowrule](https://wiki.hyprland.org/Configuring/Window-Rules/) which takes the `name` specified above as an argument. For example:
 ```ini
-windowrule = plugin:device my-games-config, title:^Cyberpunk 2077.*
+windowrule = match:title ^Cyberpunk 2077.*, device my-games-config
 ```
 
 You can have multiple such device sections with different names and different window rules applying them. Note however that **only one device windowrule can be active at a time** (usually the first).

@@ -14,24 +14,17 @@ void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
     static auto* const* PREPLAY = (Hyprlang::INT* const*) HyprlandAPI::getConfigValue(PHANDLE, CONFIG_VAR_CONSERVE_KEYS)->getDataStaticPtr();
 
     auto last = m_selected;
-    bool set = false;
 
-    if (window) for (auto rule : window->m_matchedRules) {
-        if (rule->m_ruleType == CWindowRule::RULE_PLUGIN && rule->m_rule.starts_with(CONFIG_WINDOWRULE)) {
-            auto device = CVarList(rule->m_rule, 0, ' ')[1];
+    if (window && window->m_ruleApplicator->m_otherProps.props.contains(m_ruleID)) {
+        auto device = window->m_ruleApplicator->m_otherProps.props.at(m_ruleID)->effect;
 
-            Debug::log(LOG, "[device-windowrule] setting device to {}", device);
+        Debug::log(LOG, "[device-windowrule] setting device to {} because of window rule", device);
 
-            if (device.empty()) m_selected = {};
-            else m_selected = device;
-
-            set = true;
-            break;
-        }
+        if (device == "none") m_selected = {};
+        else m_selected = device;
+    } else {
+        m_selected = {};
     }
-
-    // unset if no window rule
-    if (!set) m_selected = {};
 
     if (last != m_selected) {
         Debug::log(LOG, "[device-windowrule] changing input device config from {} to {}", last.value_or("<none>"), m_selected.value_or("<none>"));

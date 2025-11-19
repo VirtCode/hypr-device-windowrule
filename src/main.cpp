@@ -156,6 +156,8 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     HyprlandAPI::addConfigKeyword(PHANDLE, CONFIG_RULE_FILTER, onDeviceFilterKeyword, Hyprlang::SHandlerOptions {});
     HyprlandAPI::addConfigKeyword(PHANDLE, CONFIG_RULE_LED, onDeviceLedKeyword, Hyprlang::SHandlerOptions {});
 
+    g_pDeviceWindowrules->m_ruleID = Desktop::Rule::windowEffects()->registerEffect(CONFIG_WINDOWRULE);
+
     // try hooking
     try {
         g_pGetConfigValueSafeDeviceHook = hook("getConfigValueSafeDevice", "CConfigManager", (void*) &hkGetConfigValueSafeDevice);
@@ -206,7 +208,12 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     return {"device-windowrule", "a plugin to apply input device config based on the focused window", "Virt", "0.1"};
 }
 
-APICALL EXPORT void PLUGIN_EXIT() { }
+APICALL EXPORT void PLUGIN_EXIT() {
+    // unset the current device
+    g_pDeviceWindowrules->updateDevice(nullptr);
+
+    Desktop::Rule::windowEffects()->unregisterEffect(g_pDeviceWindowrules->m_ruleID);
+}
 
 // Do NOT change this function.
 APICALL EXPORT std::string PLUGIN_API_VERSION() {
