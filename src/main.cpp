@@ -9,6 +9,7 @@
 #include <hyprlang.hpp>
 #include <string>
 #include <unistd.h>
+#include <dlfcn.h>
 
 #define private public
 #include <hyprland/src/config/ConfigManager.hpp>
@@ -115,24 +116,29 @@ Hyprlang::CParseResult onDeviceLedKeyword(const char* command, const char* value
     return res;
 }
 
-/* hooks a function hook */
-CFunctionHook* hook(std::string name, std::string object, void* function) {
-    auto names = HyprlandAPI::findFunctionsByName(PHANDLE, name);
+/*
+ * hooks a function hook
+ * for some fucking reason the upstream function to find the address is deprecated
+ * so "fine, I'll do it myself"
+ */
+CFunctionHook* hook(const char* signature, void* function) {
+    Debug::log(LOG, "[dynamic-cursors] starting to hook for {}", signature);
 
-    // we hook on member functions, so search for them
-    for (auto match : names) {
-        if (!match.demangled.starts_with(object)) continue;
-
-        Debug::log(LOG, "[device-windowrule] hooking on {} for {}::{}", match.demangled, object, name);
-
-        auto hook = HyprlandAPI::createFunctionHook(PHANDLE, match.address, function);
-        hook->hook();
-
-        return hook;
+    void* addr = dlsym(nullptr, signature);
+    if (addr == NULL) {
+        Debug::log(ERR, "[dynamic-cursors] failed to hook, symbol not found");
+        throw std::runtime_error("symbol not found, are you up-to-date?");
     }
 
-    Debug::log(ERR, "Could not find hooking candidate for {}::{}", object, name);
-    throw std::runtime_error("no hook candidate found");
+    auto hook = HyprlandAPI::createFunctionHook(PHANDLE, addr, function);
+
+    Debug::log(LOG, "[dynamic-cursors] trying to hook {:p}", addr);
+    if (!hook->hook()) {
+        Debug::log(ERR, "[dynamic-cursors] could not hook, hooking failed");
+        throw std::runtime_error("hooking failed, are you on x86_64?");
+    }
+
+    return hook;
 }
 
 APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
@@ -160,8 +166,15 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     // try hooking
     try {
-        g_pGetConfigValueSafeDeviceHook = hook("getConfigValueSafeDevice", "CConfigManager", (void*) &hkGetConfigValueSafeDevice);
-        g_pDeviceConfigExistsHook = hook("deviceConfigExists", "CConfigManager", (void*) &hkDeviceConfigExists);
+        // CConfigManager
+        g_pGetConfigValueSafeDeviceHook = hook( // getConfigValueSafeDevice
+            "_ZN14CConfigManager24getConfigValueSafeDeviceERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES7_S7_",
+            (void*) &hkGetConfigValueSafeDevice
+        );
+        g_pDeviceConfigExistsHook = hook( // deviceConfigExists
+            "_ZN14CConfigManager18deviceConfigExistsERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE",
+            (void*) &hkDeviceConfigExists
+        );
 
         // you wonder why we hook these methods if we have already hooked "getConfigValueSafeDevice", don't
         // all these methods just call that in the background, and isn't the implementation here the same???
@@ -177,15 +190,36 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         // to do that, add `__attribute__ ((noipa))` to `getConfigValueSafeDevice` in `ConfigManager.cpp`
         //
         // but because you don't compile hyprland yourself probably, we'll go with this ugly workaround:
-        g_pGetDeviceIntHook = hook("getDeviceInt", "CConfigManager", (void*) &hkGetDeviceInt);
-        g_pGetDeviceStringHook = hook("getDeviceString", "CConfigManager", (void*) &hkGetDeviceString);
-        g_pGetDeviceFloatHook = hook("getDeviceFloat", "CConfigManager", (void*) &hkGetDeviceFloat);
-        g_pGetDeviceVecHook = hook("getDeviceVec", "CConfigManager", (void*) &hkGetDeviceVec);
+        g_pGetDeviceIntHook = hook( // getDeviceInt
+            "_ZN14CConfigManager12getDeviceIntERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES7_S7_",
+            (void*) &hkGetDeviceInt
+        );
+        g_pGetDeviceStringHook = hook( // getDeviceString
+            "_ZN14CConfigManager15getDeviceStringERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES7_S7_",
+            (void*) &hkGetDeviceString
+        );
+        g_pGetDeviceFloatHook = hook( // getDeviceFloat
+            "_ZN14CConfigManager14getDeviceFloatERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES7_S7_",
+            (void*) &hkGetDeviceFloat
+        );
+        g_pGetDeviceVecHook = hook( // getDeviceVec
+            "_ZN14CConfigManager12getDeviceVecERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES7_S7_",
+            (void*) &hkGetDeviceVec
+        );
 
-        g_pUpdateLEDsHook = hook("updateLEDsEj", "IKeyboard", (void*) &hkUpdateLEDs); // we wanna hook the one with the args
+        // IKeyboard
+        g_pUpdateLEDsHook = hook( // updateLEDs
+            "_ZN9IKeyboard10updateLEDsEj",
+            (void*) &hkUpdateLEDs
+        );
+    } catch (std::exception& e) {
+        Debug::log(ERR, "[device-windowrule] failed to hook, {}", e.what());
+        HyprlandAPI::addNotification(PHANDLE, std::format("[device-windowrule] cannot load, {}", e.what()), CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
+        throw e;
     } catch (...) {
-        HyprlandAPI::addNotification(PHANDLE, "[device-windowrule] Failed to load, hooks could not be made!", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
-        throw std::runtime_error("hooks failed");
+        Debug::log(ERR, "[device-windowrule] failed to hook for unknown reason");
+        HyprlandAPI::addNotification(PHANDLE, "[device-windowrule] cannot load, unknown error with hooks!", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
+        throw std::runtime_error("hooks failed for unknown reason");
     }
 
     // register callbacks
