@@ -5,6 +5,7 @@
 #include <hyprland/src/plugins/PluginAPI.hpp>
 #include <hyprland/src/managers/input/InputManager.hpp>
 #include <hyprland/src/devices/IKeyboard.hpp>
+#include <hyprland/src/desktop/state/FocusState.hpp>
 #include <hyprland/src/Compositor.hpp>
 #include <hyprlang.hpp>
 #include <string>
@@ -231,7 +232,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         auto window = std::any_cast<PHLWINDOW>(data);
 
         // only update device if the window is also focussed
-        if (window == g_pCompositor->m_lastWindow)
+        if (window == Desktop::focusState()->window())
             g_pDeviceWindowrules->updateDevice(window);
     });
 
