@@ -1,4 +1,3 @@
-#include "debug/Log.hpp"
 #include <hyprgraphics/color/Color.hpp>
 #include <hyprland/src/helpers/memory/Memory.hpp>
 #include <hyprland/src/plugins/HookSystem.hpp>
@@ -7,6 +6,7 @@
 #include <hyprland/src/devices/IKeyboard.hpp>
 #include <hyprland/src/desktop/state/FocusState.hpp>
 #include <hyprland/src/Compositor.hpp>
+#include <hyprland/src/debug/Log.hpp>
 #include <hyprlang.hpp>
 #include <string>
 #include <unistd.h>
@@ -123,19 +123,19 @@ Hyprlang::CParseResult onDeviceLedKeyword(const char* command, const char* value
  * so "fine, I'll do it myself"
  */
 CFunctionHook* hook(const char* signature, void* function) {
-    Debug::log(LOG, "[dynamic-cursors] starting to hook for {}", signature);
+    Debug::log(LOG, "[device-windowrule] starting to hook for {}", signature);
 
     void* addr = dlsym(nullptr, signature);
     if (addr == NULL) {
-        Debug::log(ERR, "[dynamic-cursors] failed to hook, symbol not found");
+        Debug::log(ERR, "[device-windowrule] failed to hook, symbol not found");
         throw std::runtime_error("symbol not found, are you up-to-date?");
     }
 
     auto hook = HyprlandAPI::createFunctionHook(PHANDLE, addr, function);
 
-    Debug::log(LOG, "[dynamic-cursors] trying to hook {:p}", addr);
+    Debug::log(LOG, "[device-windowrule] trying to hook {:p}", addr);
     if (!hook->hook()) {
-        Debug::log(ERR, "[dynamic-cursors] could not hook, hooking failed");
+        Debug::log(ERR, "[device-windowrule] could not hook, hooking failed");
         throw std::runtime_error("hooking failed, are you on x86_64?");
     }
 
