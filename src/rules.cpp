@@ -1,6 +1,8 @@
 #include "rules.hpp"
 #include "globals.hpp"
 
+#include <sstream> // required so we don't "unprivate" sstream
+
 #define private public
 #define protected public
 #include <hyprland/src/devices/IKeyboard.hpp>
@@ -18,7 +20,7 @@ void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
     if (window && window->m_ruleApplicator->m_otherProps.props.contains(m_ruleID)) {
         auto device = window->m_ruleApplicator->m_otherProps.props.at(m_ruleID)->effect;
 
-        Debug::log(LOG, "[device-windowrule] setting device to {} because of window rule", device);
+        Log::logger->log(Log::INFO, "[device-windowrule] setting device to {} because of window rule", device);
 
         if (device == "none") m_selected = {};
         else m_selected = device;
@@ -27,7 +29,7 @@ void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
     }
 
     if (last != m_selected) {
-        Debug::log(LOG, "[device-windowrule] changing input device config from {} to {}", last.value_or("<none>"), m_selected.value_or("<none>"));
+        Log::logger->log(Log::INFO, "[device-windowrule] changing input device config from {} to {}", last.value_or("<none>"), m_selected.value_or("<none>"));
 
         // see HyprCtl.cpp line 1119
         g_pInputManager->setKeyboardLayout();     // update kb layout

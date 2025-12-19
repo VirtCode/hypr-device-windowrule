@@ -1,3 +1,4 @@
+#include "debug/log/Logger.hpp"
 #include <hyprgraphics/color/Color.hpp>
 #include <hyprland/src/helpers/memory/Memory.hpp>
 #include <hyprland/src/plugins/HookSystem.hpp>
@@ -6,7 +7,6 @@
 #include <hyprland/src/devices/IKeyboard.hpp>
 #include <hyprland/src/desktop/state/FocusState.hpp>
 #include <hyprland/src/Compositor.hpp>
-#include <hyprland/src/debug/Log.hpp>
 #include <hyprlang.hpp>
 #include <string>
 #include <unistd.h>
@@ -123,19 +123,19 @@ Hyprlang::CParseResult onDeviceLedKeyword(const char* command, const char* value
  * so "fine, I'll do it myself"
  */
 CFunctionHook* hook(const char* signature, void* function) {
-    Debug::log(LOG, "[device-windowrule] starting to hook for {}", signature);
+    Log::logger->log(Log::INFO, "[device-windowrule] starting to hook for {}", signature);
 
     void* addr = dlsym(nullptr, signature);
     if (addr == NULL) {
-        Debug::log(ERR, "[device-windowrule] failed to hook, symbol not found");
+        Log::logger->log(Log::ERR, "[device-windowrule] failed to hook, symbol not found");
         throw std::runtime_error("symbol not found, are you up-to-date?");
     }
 
     auto hook = HyprlandAPI::createFunctionHook(PHANDLE, addr, function);
 
-    Debug::log(LOG, "[device-windowrule] trying to hook {:p}", addr);
+    Log::logger->log(Log::INFO, "[device-windowrule] trying to hook {:p}", addr);
     if (!hook->hook()) {
-        Debug::log(ERR, "[device-windowrule] could not hook, hooking failed");
+        Log::logger->log(Log::ERR, "[device-windowrule] could not hook, hooking failed");
         throw std::runtime_error("hooking failed, are you on x86_64?");
     }
 
@@ -214,11 +214,11 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
             (void*) &hkUpdateLEDs
         );
     } catch (std::exception& e) {
-        Debug::log(ERR, "[device-windowrule] failed to hook, {}", e.what());
+        Log::logger->log(Log::ERR, "[device-windowrule] failed to hook, {}", e.what());
         HyprlandAPI::addNotification(PHANDLE, std::format("[device-windowrule] cannot load, {}", e.what()), CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
         throw e;
     } catch (...) {
-        Debug::log(ERR, "[device-windowrule] failed to hook for unknown reason");
+        Log::logger->log(Log::ERR, "[device-windowrule] failed to hook for unknown reason");
         HyprlandAPI::addNotification(PHANDLE, "[device-windowrule] cannot load, unknown error with hooks!", CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
         throw std::runtime_error("hooks failed for unknown reason");
     }
