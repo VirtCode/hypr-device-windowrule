@@ -1,4 +1,5 @@
 #include "debug/log/Logger.hpp"
+#include "desktop/DesktopTypes.hpp"
 #include <hyprgraphics/color/Color.hpp>
 #include <hyprland/src/helpers/memory/Memory.hpp>
 #include <hyprland/src/plugins/HookSystem.hpp>
@@ -7,6 +8,7 @@
 #include <hyprland/src/devices/IKeyboard.hpp>
 #include <hyprland/src/desktop/state/FocusState.hpp>
 #include <hyprland/src/Compositor.hpp>
+#include <hyprland/src/event/EventBus.hpp>
 #include <hyprlang.hpp>
 #include <string>
 #include <unistd.h>
@@ -224,19 +226,17 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     }
 
     // register callbacks
-    static const auto FOCUS_CALLBACK = HyprlandAPI::registerCallbackDynamic(PHANDLE, "activeWindow", [&](void* self, SCallbackInfo&, std::any data) {
-        g_pDeviceWindowrules->updateDevice(std::any_cast<PHLWINDOW>(data));
+    static const auto FOCUS_LISTENER = Event::bus()->m_events.window.active.listen([&](PHLWINDOW window, Desktop::eFocusReason) {
+        g_pDeviceWindowrules->updateDevice(window);
     });
 
-    static const auto RULE_CHANGE_CALLBACK = HyprlandAPI::registerCallbackDynamic(PHANDLE, "windowUpdateRules", [&](void* self, SCallbackInfo&, std::any data) {
-        auto window = std::any_cast<PHLWINDOW>(data);
-
+    static const auto RULE_CHANGE_LISTENER = Event::bus()->m_events.window.updateRules.listen([&](PHLWINDOW window) {
         // only update device if the window is also focussed
         if (window == Desktop::focusState()->window())
             g_pDeviceWindowrules->updateDevice(window);
     });
 
-    static const auto PRE_CONFIG_CALLBACK = HyprlandAPI::registerCallbackDynamic( PHANDLE, "preConfigReload", [&](void* self, SCallbackInfo&, std::any data) {
+    static const auto PRE_CONFIG_LISTENER = Event::bus()->m_events.config.preReload.listen([&]() {
         g_pDeviceWindowrules->clearConfig();
     });
 
