@@ -25,7 +25,7 @@ class CDeviceWindowrules {
     void updateDevice(const PHLWINDOW);
 
     /* get the config value for the current device or `nullptr` if nothing changed */
-    Hyprlang::CConfigValue* getConfig(const std::string& dev, const std::string& val) const;
+    Hyprlang::CConfigValue* getConfig(WP<Hyprlang::CConfig> source, const std::string& dev, const std::string& val) const;
 
     /* check whether we have a custom config for the given device */
     bool hasConfig(const std::string& dev) const;

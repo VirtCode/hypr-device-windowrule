@@ -10,12 +10,13 @@
 #include <hyprland/src/Compositor.hpp>
 #include <hyprland/src/event/EventBus.hpp>
 #include <hyprlang.hpp>
+#include <hyprutils/string/VarList.hpp>
 #include <string>
 #include <unistd.h>
 #include <dlfcn.h>
 
 #define private public
-#include <hyprland/src/config/ConfigManager.hpp>
+#include <hyprland/src/config/legacy/ConfigManager.hpp>
 #undef private
 
 #include "globals.hpp"
@@ -23,8 +24,8 @@
 
 typedef Hyprlang::CConfigValue* (*origGetConfigValueSafeDevice)(void*, const std::string& dev, const std::string& val, const std::string& fallback);
 inline CFunctionHook* g_pGetConfigValueSafeDeviceHook = nullptr;
-Hyprlang::CConfigValue* hkGetConfigValueSafeDevice(void* thisptr, const std::string& dev, const std::string& val, const std::string& fallback) {
-    const auto value = g_pDeviceWindowrules->getConfig(dev, val);
+Hyprlang::CConfigValue* hkGetConfigValueSafeDevice(Config::Legacy::CConfigManager* thisptr, const std::string& dev, const std::string& val, const std::string& fallback) {
+    const auto value = g_pDeviceWindowrules->getConfig(thisptr->m_config, dev, val);
     if (value) return value;
 
     // fall back to normal config if not set
@@ -33,8 +34,8 @@ Hyprlang::CConfigValue* hkGetConfigValueSafeDevice(void* thisptr, const std::str
 
 typedef int (*origGetDeviceInt)(void*, const std::string& dev, const std::string& val, const std::string& fallback);
 inline CFunctionHook* g_pGetDeviceIntHook = nullptr;
-int hkGetDeviceInt(void* thisptr, const std::string& dev, const std::string& val, const std::string& fallback) {
-    auto config = g_pConfigManager->getConfigValueSafeDevice(dev, val, fallback);
+int hkGetDeviceInt(Config::Legacy::CConfigManager* thisptr, const std::string& dev, const std::string& val, const std::string& fallback) {
+    auto config = thisptr->getConfigValueSafeDevice(dev, val, fallback);
 
     // can be null if the value does not exist and the fallback is "" which happens when it is a special device-only value (currently `enabled` and `keybinds`)
     //
@@ -54,9 +55,9 @@ int hkGetDeviceInt(void* thisptr, const std::string& dev, const std::string& val
 
 typedef std::string (*origGetDeviceString)(void*, const std::string& dev, const std::string& v, const std::string& fallback);
 inline CFunctionHook* g_pGetDeviceStringHook = nullptr;
-std::string hkGetDeviceString(void* thisptr, const std::string& dev, const std::string& v, const std::string& fallback) {
+std::string hkGetDeviceString(Config::Legacy::CConfigManager* thisptr, const std::string& dev, const std::string& v, const std::string& fallback) {
     // 1:1 copy from hyprland
-    auto VAL = std::string{std::any_cast<Hyprlang::STRING>(g_pConfigManager->getConfigValueSafeDevice(dev, v, fallback)->getValue())};
+    auto VAL = std::string{std::any_cast<Hyprlang::STRING>(thisptr->getConfigValueSafeDevice(dev, v, fallback)->getValue())};
 
     if (VAL == STRVAL_EMPTY)
         return "";
@@ -66,22 +67,22 @@ std::string hkGetDeviceString(void* thisptr, const std::string& dev, const std::
 
 typedef float (*origGetDeviceFloat)(void*, const std::string& dev, const std::string& v, const std::string& fallback);
 inline CFunctionHook* g_pGetDeviceFloatHook = nullptr;
-float hkGetDeviceFloat(void* thisptr, const std::string& dev, const std::string& v, const std::string& fallback) {
+float hkGetDeviceFloat(Config::Legacy::CConfigManager* thisptr, const std::string& dev, const std::string& v, const std::string& fallback) {
     // 1:1 copy from hyprland
-    return std::any_cast<Hyprlang::FLOAT>(g_pConfigManager->getConfigValueSafeDevice(dev, v, fallback)->getValue());
+    return std::any_cast<Hyprlang::FLOAT>(thisptr->getConfigValueSafeDevice(dev, v, fallback)->getValue());
 }
 
 typedef Vector2D (*origGetDeviceVec)(void*, const std::string& dev, const std::string& v, const std::string& fallback);
 inline CFunctionHook* g_pGetDeviceVecHook = nullptr;
-Vector2D hkGetDeviceVec(void* thisptr, const std::string& dev, const std::string& v, const std::string& fallback) {
+Vector2D hkGetDeviceVec(Config::Legacy::CConfigManager* thisptr, const std::string& dev, const std::string& v, const std::string& fallback) {
     // 1:1 copy from hyprland
-    auto vec = std::any_cast<Hyprlang::VEC2>(g_pConfigManager->getConfigValueSafeDevice(dev, v, fallback)->getValue());
+    auto vec = std::any_cast<Hyprlang::VEC2>(thisptr->getConfigValueSafeDevice(dev, v, fallback)->getValue());
     return {vec.x, vec.y};
 }
 
 typedef bool (*origDeviceConfigExists)(void*, const std::string& dev);
 inline CFunctionHook* g_pDeviceConfigExistsHook = nullptr;
-bool hkDeviceConfigExists(void* thisptr, const std::string& dev) {
+bool hkDeviceConfigExists(Config::Legacy::CConfigManager* thisptr, const std::string& dev) {
     return g_pDeviceWindowrules->hasConfig(dev) || (*(origDeviceConfigExists)g_pDeviceConfigExistsHook->m_original)(thisptr, dev);
 }
 
@@ -96,7 +97,7 @@ void hkUpdateLEDs(IKeyboard* thisptr, uint32_t leds) {
 
 Hyprlang::CParseResult onDeviceFilterKeyword(const char* command, const char* value) {
     Hyprlang::CParseResult res;
-    CVarList args(value, 0, ',');
+    Hyprutils::String::CVarList args(value, 0, ',');
 
     if (args.size() == 2)
         g_pDeviceWindowrules->registerDeviceFilter(args[0], args[1]);
@@ -108,7 +109,7 @@ Hyprlang::CParseResult onDeviceFilterKeyword(const char* command, const char* va
 
 Hyprlang::CParseResult onDeviceLedKeyword(const char* command, const char* value) {
     Hyprlang::CParseResult res;
-    CVarList args(value, 0, ',');
+    Hyprutils::String::CVarList args(value, 0, ',');
     auto mask = configStringToInt(args[1]);
 
     if (args.size() == 2 && mask.has_value())
@@ -171,11 +172,11 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     try {
         // CConfigManager
         g_pGetConfigValueSafeDeviceHook = hook( // getConfigValueSafeDevice
-            "_ZN14CConfigManager24getConfigValueSafeDeviceERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES7_S7_",
+            "_ZN6Config6Legacy14CConfigManager24getConfigValueSafeDeviceERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES9_S9_",
             (void*) &hkGetConfigValueSafeDevice
         );
         g_pDeviceConfigExistsHook = hook( // deviceConfigExists
-            "_ZN14CConfigManager18deviceConfigExistsERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE",
+            "_ZN6Config6Legacy14CConfigManager18deviceConfigExistsERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE",
             (void*) &hkDeviceConfigExists
         );
 
@@ -194,19 +195,19 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         //
         // but because you don't compile hyprland yourself probably, we'll go with this ugly workaround:
         g_pGetDeviceIntHook = hook( // getDeviceInt
-            "_ZN14CConfigManager12getDeviceIntERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES7_S7_",
+            "_ZN6Config6Legacy14CConfigManager12getDeviceIntERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES9_S9_",
             (void*) &hkGetDeviceInt
         );
         g_pGetDeviceStringHook = hook( // getDeviceString
-            "_ZN14CConfigManager15getDeviceStringERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES7_S7_",
+            "_ZN6Config6Legacy14CConfigManager15getDeviceStringERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES9_S9_",
             (void*) &hkGetDeviceString
         );
         g_pGetDeviceFloatHook = hook( // getDeviceFloat
-            "_ZN14CConfigManager14getDeviceFloatERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES7_S7_",
+            "_ZN6Config6Legacy14CConfigManager14getDeviceFloatERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES9_S9_",
             (void*) &hkGetDeviceFloat
         );
         g_pGetDeviceVecHook = hook( // getDeviceVec
-            "_ZN14CConfigManager12getDeviceVecERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES7_S7_",
+            "_ZN6Config6Legacy14CConfigManager12getDeviceVecERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES9_S9_",
             (void*) &hkGetDeviceVec
         );
 

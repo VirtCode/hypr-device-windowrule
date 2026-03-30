@@ -1,16 +1,18 @@
 #include "rules.hpp"
 #include "globals.hpp"
 
+#include <hyprlang.hpp>
 #include <sstream> // required so we don't "unprivate" sstream
 
 #define private public
 #define protected public
 #include <hyprland/src/devices/IKeyboard.hpp>
-#include <hyprland/src/config/ConfigManager.hpp>
+#include <hyprland/src/config/legacy/ConfigManager.hpp>
 #undef private
 #undef protected
 
 #include <hyprland/src/managers/input/InputManager.hpp>
+#include <hyprland/src/desktop/view/Window.hpp>
 
 void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
     static auto* const* PREPLAY = (Hyprlang::INT* const*) HyprlandAPI::getConfigValue(PHANDLE, CONFIG_VAR_CONSERVE_KEYS)->getDataStaticPtr();
@@ -59,14 +61,14 @@ void CDeviceWindowrules::updateDevice(const PHLWINDOW window) {
     }
 }
 
-Hyprlang::CConfigValue* CDeviceWindowrules::getConfig(const std::string& dev, const std::string& val) const {
+Hyprlang::CConfigValue* CDeviceWindowrules::getConfig(WP<Hyprlang::CConfig> source, const std::string& dev, const std::string& val) const {
     if (m_selected.has_value()) {
 
         /// only use custom rule if whitelist is empty or device is whitelisted
         if (m_devices.contains(m_selected.value()) && !m_devices.at(m_selected.value()).contains(dev))
             return nullptr;
 
-        const auto VAL = g_pConfigManager->m_config->getSpecialConfigValuePtr("device", val.c_str(), m_selected->c_str());
+        const auto VAL = source->getSpecialConfigValuePtr("device", val.c_str(), m_selected->c_str());
 
         if (VAL && VAL->m_bSetByUser)
             return VAL;
